@@ -1,0 +1,149 @@
+model User {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  code          String      @unique
+  email         String      @unique
+  name          String
+  date_of_birth DateTime
+  course        String
+  password      String
+  role          ROLE        @default(user)
+  groupChatIds  String[]    @db.ObjectId
+  urlImage      String?
+  status        TStatusUser @default(pending)
+
+  adminGroupChat GroupChat[]
+  messages       Message[]
+  post           Post[]
+  comments       Comment[]
+  groupChats     GroupChat[] @relation("userGroupChat", fields: [groupChatIds], references: [id])
+}
+
+model Subject {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  code    String   @unique
+  name    String
+  lessons Lesson[]
+}
+
+model Lesson {
+  id                   String               @id @default(auto()) @map("_id") @db.ObjectId
+  name                 String
+  subjectId            String               @db.ObjectId
+  subject              Subject              @relation(fields: [subjectId], references: [id])
+  type                 TLesson
+  lessonMultipleChoice LessonMultipleChoice @relation(fields: [id], references: [lessonId])
+  lessonDocument       LessonDocument       @relation(fields: [id], references: [lessonId])
+}
+
+model LessonDocument {
+  id       String  @id @default(auto()) @map("_id") @db.ObjectId
+  lessonId String  @unique @db.ObjectId
+  lesson   Lesson?
+  content  String
+}
+
+model LessonMultipleChoice {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  lessonId   String   @unique @db.ObjectId
+  lesson     Lesson?
+  question   String
+  answer     String[]
+  answerTrue String[]
+}
+
+model GroupChat {
+  id              String     @id @default(auto()) @map("_id") @db.ObjectId
+  name            String?
+  isGroup         Boolean    @default(true)
+  type            TGroupChat @default(group)
+  adminId         String     @db.ObjectId
+  userIds         String[]   @default([]) @db.ObjectId
+  messages        Message[]
+  lastMessage     String?
+  lastMessageTime DateTime   @default(now())
+
+  users User[] @relation("userGroupChat", fields: [userIds], references: [id])
+  admin User   @relation(fields: [adminId], references: [id])
+}
+
+model Message {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  senderId    String   @db.ObjectId
+  groupChatId String   @db.ObjectId
+  content     String
+  createdAt   DateTime @default(now())
+
+  sender    User      @relation(fields: [senderId], references: [id])
+  groupChat GroupChat @relation(fields: [groupChatId], references: [id])
+}
+
+model Post {
+  id       String    @id @default(auto()) @map("_id") @db.ObjectId
+  content  String
+  userId   String    @db.ObjectId
+  likes    String[]
+  comments Comment[]
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Comment {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  content String
+  userId  String   @db.ObjectId
+  postId  String   @db.ObjectId
+  tags    String[]
+
+  post Post @relation(fields: [postId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+}
+
+model UserNotification {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String       @db.ObjectId
+  notificationId String       @db.ObjectId
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  
+  notification   Notification @relation(fields: [notificationId], references: [id])
+}
+
+model Notification {
+  id      String             @id @default(auto()) @map("_id") @db.ObjectId
+  content String
+  url     String
+
+  users   UserNotification[]
+}
+
+enum ROLE {
+  user
+  admin
+  superAdmin
+}
+
+enum TGroupChat {
+  classroom
+  community
+  group
+}
+
+enum TLesson {
+  document
+  multiple_choice
+}
+
+enum TStatusUser {
+  band
+  active
+  pending
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
