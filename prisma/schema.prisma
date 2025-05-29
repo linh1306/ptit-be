@@ -1,0 +1,243 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  user
+  admin
+  superAdmin
+}
+
+enum GroupChatType {
+  classroom
+  community
+  group
+}
+
+enum LessonType {
+  document
+  multiple_choice
+}
+
+enum UserStatus {
+  banned
+  active
+  pending
+}
+
+model Users {
+  id        String     @id @default(uuid())
+  code      String     @unique
+  email     String     @unique
+  name      String?
+  birthDate DateTime?
+  course    String?
+  password  String?
+  role      Role       @default(user)
+  status    UserStatus @default(pending)
+  urlAvatar String?
+
+  posts                  Posts[]
+  comments               Comments[]
+  messages               Messages[]
+  groupChats             GroupChats[]         @relation("GroupChatAdmin")
+  groupChatUsers         GroupChatUsers[]
+  userNotifications      UserNotifications[]
+  reportUserRequests     ReportUserRequests[]
+  postLikes              PostLikes[]
+  friendRequestsSent     FriendRequests[]     @relation("Sender")
+  friendRequestsReceived FriendRequests[]     @relation("Receiver")
+  friendsAsUser          Friends[]            @relation("User")
+  friendsAsFriend        Friends[]            @relation("Friend")
+}
+
+model Subjects {
+  id   String @id @default(uuid())
+  code String @unique
+  name String
+
+  lessons Lessons[]
+}
+
+model Lessons {
+  id        String      @id @default(uuid())
+  name      String?
+  /// @DtoRelationIncludeId
+  /// @DtoUpdateHidden
+  /// @DtoCreateHidden
+  subjectId String
+  /// @DtoUpdateHidden
+  type      LessonType?
+
+  subject              Subjects               @relation(fields: [subjectId], references: [id])
+  lessonDocument       LessonDocuments?
+  lessonMultipleChoice LessonMultipleChoices?
+}
+
+model LessonDocuments {
+  id       String  @id @default(uuid())
+  lessonId String  @unique
+  content  String?
+
+  lesson Lessons @relation(fields: [lessonId], references: [id])
+}
+
+model LessonMultipleChoices {
+  id        String @id @default(uuid())
+  lessonId  String @unique
+  questions Json
+
+  lesson Lessons @relation(fields: [lessonId], references: [id])
+}
+
+model GroupChats {
+  id   String @id @default(uuid())
+  name String
+
+  /// @DtoCreateOptional
+  isGroup Boolean       @default(true)
+  /// @DtoCreateOptional
+  type    GroupChatType @default(group)
+
+  /// @DtoRelationIncludeId
+  /// @DtoCreateHidden
+  adminId       String
+  /// @DtoRelationIncludeId
+  /// @DtoCreateHidden
+  /// @DtoUpdateHidden
+  lastMessageId String? @unique
+
+  admin          Users            @relation("GroupChatAdmin", fields: [adminId], references: [id])
+  lastMessage    Messages?        @relation("GroupChatLastMessage", fields: [lastMessageId], references: [id])
+  messages       Messages[]       @relation("GroupChatMessages")
+  groupChatUsers GroupChatUsers[]
+}
+
+model GroupChatUsers {
+  groupChatId String
+  userId      String
+
+  groupChat GroupChats @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  user      Users      @relation(fields: [userId], references: [id])
+
+  @@id([groupChatId, userId])
+}
+
+model Messages {
+  id          String   @id @default(uuid())
+  userId      String
+  groupChatId String
+  content     String?
+  createdAt   DateTime @default(now())
+
+  user          Users       @relation(fields: [userId], references: [id])
+  groupChat     GroupChats  @relation("GroupChatMessages", fields: [groupChatId], references: [id], onDelete: Cascade)
+  lastMessageOf GroupChats? @relation("GroupChatLastMessage")
+}
+
+model Posts {
+  id        String   @id @default(uuid())
+  content   String
+  /// @DtoRelationIncludeId
+  /// @DtoCreateHidden
+  /// @DtoUpdateHidden
+  userId    String
+  createdAt DateTime @default(now())
+
+  user      Users       @relation(fields: [userId], references: [id])
+  comments  Comments[]
+  postLikes PostLikes[]
+}
+
+model Comments {
+  id        String   @id @default(uuid())
+  content   String
+  userId    String
+  postId    String
+  /// @DtoRelationIncludeId
+  /// @DtoUpdateHidden
+  commentId String?
+  tags      String[]
+  createdAt DateTime @default(now())
+
+  user          Users      @relation(fields: [userId], references: [id])
+  post          Posts      @relation(fields: [postId], references: [id])
+  parentComment Comments?  @relation("CommentToComment", fields: [commentId], references: [id])
+  childComments Comments[] @relation("CommentToComment")
+}
+
+model Notifications {
+  id      String  @id @default(uuid())
+  content String?
+  url     String?
+
+  userNotifications UserNotifications[]
+}
+
+model UserNotifications {
+  id             String   @id @default(uuid())
+  userId         String
+  notificationId String
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user         Users         @relation(fields: [userId], references: [id])
+  notification Notifications @relation(fields: [notificationId], references: [id])
+}
+
+model ReportRequests {
+  id           String   @id @default(uuid())
+  date         DateTime @unique
+  requestCount Int[]    @default([])
+  createdAt    DateTime @default(now())
+}
+
+model ReportUserRequests {
+  id        String   @id @default(uuid())
+  ip        String?
+  userId    String
+  timestamp DateTime @default(now())
+
+  user Users @relation(fields: [userId], references: [id])
+}
+
+model PostLikes {
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post Posts @relation(fields: [postId], references: [id])
+  user Users @relation(fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+}
+
+model FriendRequests {
+  id         String   @id @default(uuid())
+  senderId   String
+  /// @DtoRelationIncludeId
+  /// @DtoUpdateHidden
+  receiverId String
+  /// @DtoUpdateOptional
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+
+  sender   Users @relation("Sender", fields: [senderId], references: [id])
+  receiver Users @relation("Receiver", fields: [receiverId], references: [id])
+}
+
+model Friends {
+  userId    String
+  friendId  String
+  createdAt DateTime @default(now())
+
+  user   Users @relation("User", fields: [userId], references: [id])
+  friend Users @relation("Friend", fields: [friendId], references: [id])
+
+  @@id([userId, friendId])
+}
